@@ -1,0 +1,77 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: CloudFormation template for the snapshot-s3 Lambda function
+
+Resources:
+  SnapshotS3LambdaFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: SnapshotS3Function
+      Handler: main
+      Runtime: go1.x
+      Code:
+        S3Bucket: your-s3-bucket-name
+        S3Key: your-s3-key-for-deployment.zip
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Timeout: 30
+
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: LambdaRDSExportPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - rds:StartExportTask
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - s3:PutObject
+                  - s3:PutObjectAcl
+                Resource: !Sub 'arn:aws:s3:::${YourS3BucketName}/*'
+              - Effect: Allow
+                Action:
+                  - kms:Decrypt
+                  - kms:Encrypt
+                Resource: !Ref KmsKeyArn
+
+  SnapshotExportKmsKey:
+    Type: AWS::KMS::Key
+    Properties:
+      Description: KMS key for RDS snapshot export
+      KeyPolicy:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              AWS: !Sub arn:aws:iam::${AWS::AccountId}:root
+            Action: "kms:*"
+            Resource: "*"
+
+  SnapshotExportKmsKeyAlias:
+    Type: AWS::KMS::Alias
+    Properties:
+      AliasName: alias/snapshot-export-key
+      TargetKeyId: !Ref SnapshotExportKmsKey
+
+# ...既存のKmsKeyArnセクションを以下のように修正...
+  KmsKeyArn:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: /your/parameter/path/kms-key-arn
+      Type: String
+      Value: !GetAtt SnapshotExportKmsKey.Arn
+
+Outputs:
+  LambdaFunctionArn:
+    Description: ARN of the Lambda function
+    Value: !GetAtt SnapshotS3LambdaFunction.Arn
