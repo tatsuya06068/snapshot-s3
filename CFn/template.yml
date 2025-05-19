@@ -63,13 +63,31 @@ Resources:
       AliasName: alias/snapshot-export-key
       TargetKeyId: !Ref SnapshotExportKmsKey
 
-# ...既存のKmsKeyArnセクションを以下のように修正...
-  KmsKeyArn:
-    Type: AWS::SSM::Parameter
+#RdsExportRole:
+    Type: AWS::IAM::Role
     Properties:
-      Name: /your/parameter/path/kms-key-arn
-      Type: String
-      Value: !GetAtt SnapshotExportKmsKey.Arn
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: rds.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: RdsExportToS3
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:PutObject
+                  - s3:ListBucket
+                Resource: !Sub "arn:aws:s3:::${S3BucketName}/*"
+              - Effect: Allow
+                Action:
+                  - kms:Encrypt
+                  - kms:Decrypt
+                Resource: "*" # 必要に応じてKMSキーARNに限定
 
 Outputs:
   LambdaFunctionArn:
